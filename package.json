@@ -1,0 +1,18 @@
+{
+  "name": "js-xhr-hook-goat",
+  "version": "v0.1",
+  "description": "靶场用于测试xhr hook",
+  "main": "index.js",
+  "repository": "git@github.com:JSREI/js-xhr-hook-goat.git",
+  "author": "CC11001100 <CC11001100@qq.com>",
+  "license": "MIT",
+  "scripts": {
+    "pages": "node pages.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "express": "^4.21.2",
+    "body-parser": "^1.20.3"
+  }
+}
