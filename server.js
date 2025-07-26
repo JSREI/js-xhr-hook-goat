@@ -247,6 +247,103 @@ app.post('/api/submit-user-info', decryptJsonFields, (req, res) => {
     });
 });
 
+// 加密响应字段的函数
+const encryptResponseField = (value) => {
+    const secretKey = 'response-decrypt-2025';
+    return CryptoJS.AES.encrypt(value, secretKey).toString();
+};
+
+// 用户详细信息接口 - 返回加密字段
+app.get('/api/user-details/:userId', (req, res) => {
+    const userId = req.params.userId;
+
+    // 模拟用户数据库
+    const users = {
+        '1001': {
+            id: 1001,
+            name: '张三',
+            email: 'zhangsan@company.com',
+            department: '技术部',
+            phone: '13800138001',
+            idCard: '110101199001011001',
+            bankCard: '6222021234567890001',
+            address: '北京市朝阳区某某街道123号',
+            createdAt: '2023-01-15T08:30:00Z',
+            lastLogin: '2025-01-31T10:15:00Z',
+            status: '正常'
+        },
+        '1002': {
+            id: 1002,
+            name: '李四',
+            email: 'lisi@company.com',
+            department: '市场部',
+            phone: '13800138002',
+            idCard: '110101199002022002',
+            bankCard: '6222021234567890002',
+            address: '上海市浦东新区某某路456号',
+            createdAt: '2023-02-20T09:45:00Z',
+            lastLogin: '2025-01-31T09:30:00Z',
+            status: '正常'
+        },
+        '1003': {
+            id: 1003,
+            name: '王五',
+            email: 'wangwu@company.com',
+            department: '财务部',
+            phone: '13800138003',
+            idCard: '110101199003033003',
+            bankCard: '6222021234567890003',
+            address: '广州市天河区某某大道789号',
+            createdAt: '2023-03-10T14:20:00Z',
+            lastLogin: '2025-01-30T16:45:00Z',
+            status: '正常'
+        },
+        '1004': {
+            id: 1004,
+            name: '赵六',
+            email: 'zhaoliu@company.com',
+            department: '人事部',
+            phone: '13800138004',
+            idCard: '110101199004044004',
+            bankCard: '6222021234567890004',
+            address: '深圳市南山区某某科技园101号',
+            createdAt: '2023-04-05T11:10:00Z',
+            lastLogin: '2025-01-29T14:20:00Z',
+            status: '正常'
+        }
+    };
+
+    const user = users[userId];
+
+    if (!user) {
+        return res.status(404).json({ error: '用户不存在' });
+    }
+
+    // 构建响应，敏感字段加密
+    const response = {
+        success: true,
+        message: '获取用户信息成功',
+        data: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            department: user.department,
+            // 敏感字段加密
+            encryptedPhone: encryptResponseField(user.phone),
+            encryptedIdCard: encryptResponseField(user.idCard),
+            encryptedBankCard: encryptResponseField(user.bankCard),
+            encryptedAddress: encryptResponseField(user.address),
+            // 其他字段保持明文
+            createdAt: user.createdAt,
+            lastLogin: user.lastLogin,
+            status: user.status
+        },
+        timestamp: new Date().toISOString()
+    };
+
+    res.json(response);
+});
+
 
 
 const port = 48159;
