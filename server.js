@@ -920,6 +920,606 @@ app.post('/api/protobuf', handleProtobufRequest, (req, res) => {
     req.sendProtobufResponse(responseData);
 });
 
+// Protocol Buffers 响应接口
+app.get('/api/protobuf-response', (req, res) => {
+    if (!protobufRoot) {
+        return res.status(500).json({ error: 'Protocol Buffers schema not initialized' });
+    }
+
+    const category = req.query.category;
+    const option = req.query.option;
+
+    if (!category || !option) {
+        return res.status(400).json({ error: '缺少必填参数: category, option' });
+    }
+
+    try {
+        // 定义响应schema
+        const responseSchema = `
+            syntax = "proto3";
+            package api;
+
+            message DataPoint {
+                string label = 1;
+                double value = 2;
+                string unit = 3;
+                int64 timestamp = 4;
+            }
+
+            message ChartData {
+                string chart_type = 1;
+                string title = 2;
+                repeated DataPoint data_points = 3;
+                map<string, string> metadata = 4;
+            }
+
+            message ReportData {
+                string report_id = 1;
+                string title = 2;
+                string description = 3;
+                repeated ChartData charts = 4;
+                map<string, double> summary_metrics = 5;
+                int64 generated_at = 6;
+            }
+
+            message DataResponse {
+                string request_id = 1;
+                int64 timestamp = 2;
+                bool success = 3;
+                string message = 4;
+                int32 code = 5;
+                string category = 6;
+                string option = 7;
+                ReportData report_data = 8;
+            }
+        `;
+
+        const responseRoot = protobuf.parse(responseSchema).root;
+        const DataResponse = responseRoot.lookupType('api.DataResponse');
+
+        // 生成模拟数据
+        const mockData = generateMockData(category, option);
+
+        // 创建protobuf响应
+        const responseMessage = DataResponse.create(mockData);
+        const responseBuffer = DataResponse.encode(responseMessage).finish();
+
+        // 设置响应头并发送二进制数据
+        res.setHeader('Content-Type', 'application/x-protobuf');
+        res.send(responseBuffer);
+
+    } catch (error) {
+        res.status(500).json({ error: 'Protocol Buffers 响应生成失败', details: error.message });
+    }
+});
+
+// 生成模拟数据的函数
+function generateMockData(category, option) {
+    const requestId = Math.random().toString(36).substring(2, 15);
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    const baseResponse = {
+        request_id: requestId,
+        timestamp: timestamp,
+        success: true,
+        message: `${category}-${option} 数据获取成功`,
+        code: 200,
+        category: category,
+        option: option
+    };
+
+    // 根据类型生成不同的报告数据
+    const reportData = {
+        report_id: 'RPT' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+        generated_at: timestamp
+    };
+
+    switch(category) {
+        case 'analytics':
+            reportData.title = getAnalyticsTitle(option);
+            reportData.description = getAnalyticsDescription(option);
+            reportData.charts = generateAnalyticsCharts(option);
+            reportData.summary_metrics = generateAnalyticsMetrics(option);
+            break;
+
+        case 'reports':
+            reportData.title = getReportsTitle(option);
+            reportData.description = getReportsDescription(option);
+            reportData.charts = generateReportsCharts(option);
+            reportData.summary_metrics = generateReportsMetrics(option);
+            break;
+
+        case 'statistics':
+            reportData.title = getStatisticsTitle(option);
+            reportData.description = getStatisticsDescription(option);
+            reportData.charts = generateStatisticsCharts(option);
+            reportData.summary_metrics = generateStatisticsMetrics(option);
+            break;
+
+        case 'insights':
+            reportData.title = getInsightsTitle(option);
+            reportData.description = getInsightsDescription(option);
+            reportData.charts = generateInsightsCharts(option);
+            reportData.summary_metrics = generateInsightsMetrics(option);
+            break;
+
+        default:
+            reportData.title = '未知数据类型';
+            reportData.description = '无法识别的数据类型';
+            reportData.charts = [];
+            reportData.summary_metrics = {};
+    }
+
+    return {
+        ...baseResponse,
+        report_data: reportData
+    };
+}
+
+// 辅助函数：生成标题
+function getAnalyticsTitle(option) {
+    const titles = {
+        sales: '销售数据分析报告',
+        revenue: '收入分析报告',
+        customers: '客户分析报告',
+        products: '产品分析报告'
+    };
+    return titles[option] || '业务分析报告';
+}
+
+function getReportsTitle(option) {
+    const titles = {
+        performance: '系统性能报告',
+        errors: '错误日志报告',
+        security: '安全审计报告',
+        usage: '系统使用情况报告'
+    };
+    return titles[option] || '系统报告';
+}
+
+function getStatisticsTitle(option) {
+    const titles = {
+        traffic: '流量统计报告',
+        conversion: '转化率统计报告',
+        engagement: '用户参与度统计',
+        retention: '用户留存分析报告'
+    };
+    return titles[option] || '统计数据报告';
+}
+
+function getInsightsTitle(option) {
+    const titles = {
+        trends: '趋势预测分析',
+        recommendations: '智能推荐报告',
+        anomalies: '异常检测报告',
+        forecasting: '预测分析报告'
+    };
+    return titles[option] || '深度洞察报告';
+}
+
+// 辅助函数：生成描述
+function getAnalyticsDescription(option) {
+    const descriptions = {
+        sales: '基于最近30天的销售数据，分析销售趋势、热门产品和销售渠道表现',
+        revenue: '分析各业务线收入贡献，识别增长机会和风险点',
+        customers: '深入分析客户行为模式、价值分布和生命周期',
+        products: '评估产品性能、市场接受度和优化建议'
+    };
+    return descriptions[option] || '业务数据深度分析';
+}
+
+function getReportsDescription(option) {
+    const descriptions = {
+        performance: '系统各组件性能指标监控，包括响应时间、吞吐量和资源使用率',
+        errors: '系统错误日志汇总分析，识别常见问题和解决方案',
+        security: '安全事件监控和威胁分析，确保系统安全性',
+        usage: '用户使用行为分析，优化用户体验和系统设计'
+    };
+    return descriptions[option] || '系统运行状况分析';
+}
+
+function getStatisticsDescription(option) {
+    const descriptions = {
+        traffic: '网站流量来源分析，包括访问量、页面浏览量和用户行为路径',
+        conversion: '转化漏斗分析，识别转化瓶颈和优化机会',
+        engagement: '用户参与度指标分析，包括停留时间、互动频率等',
+        retention: '用户留存率分析，了解用户粘性和流失原因'
+    };
+    return descriptions[option] || '数据统计分析';
+}
+
+function getInsightsDescription(option) {
+    const descriptions = {
+        trends: '基于历史数据和机器学习算法预测未来趋势',
+        recommendations: 'AI驱动的个性化推荐和业务优化建议',
+        anomalies: '智能异常检测，及时发现数据异常和潜在问题',
+        forecasting: '预测模型分析，为决策提供数据支持'
+    };
+    return descriptions[option] || 'AI驱动的深度洞察';
+}
+
+// 生成图表数据的函数
+function generateAnalyticsCharts(option) {
+    const charts = [];
+    const now = Date.now();
+
+    switch(option) {
+        case 'sales':
+            charts.push({
+                chart_type: 'line',
+                title: '销售趋势图',
+                data_points: Array.from({length: 7}, (_, i) => ({
+                    label: `第${i+1}天`,
+                    value: Math.random() * 10000 + 5000,
+                    unit: '元',
+                    timestamp: Math.floor((now - (6-i) * 24 * 60 * 60 * 1000) / 1000)
+                })),
+                metadata: { period: '最近7天', currency: 'CNY' }
+            });
+            break;
+        case 'revenue':
+            charts.push({
+                chart_type: 'bar',
+                title: '收入分布图',
+                data_points: [
+                    { label: '产品A', value: 45000, unit: '元', timestamp: Math.floor(now / 1000) },
+                    { label: '产品B', value: 32000, unit: '元', timestamp: Math.floor(now / 1000) },
+                    { label: '产品C', value: 28000, unit: '元', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { period: '本月', currency: 'CNY' }
+            });
+            break;
+        case 'customers':
+            charts.push({
+                chart_type: 'pie',
+                title: '客户分布图',
+                data_points: [
+                    { label: '新客户', value: 35, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '老客户', value: 45, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '流失客户', value: 20, unit: '%', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { total_customers: '1250' }
+            });
+            break;
+        case 'products':
+            charts.push({
+                chart_type: 'bar',
+                title: '产品销量排行',
+                data_points: [
+                    { label: '智能手机', value: 1250, unit: '台', timestamp: Math.floor(now / 1000) },
+                    { label: '平板电脑', value: 890, unit: '台', timestamp: Math.floor(now / 1000) },
+                    { label: '智能手表', value: 650, unit: '台', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { period: '本月' }
+            });
+            break;
+    }
+
+    return charts;
+}
+
+function generateReportsCharts(option) {
+    const charts = [];
+    const now = Date.now();
+
+    switch(option) {
+        case 'performance':
+            charts.push({
+                chart_type: 'line',
+                title: '系统响应时间',
+                data_points: Array.from({length: 24}, (_, i) => ({
+                    label: `${i}:00`,
+                    value: Math.random() * 200 + 100,
+                    unit: 'ms',
+                    timestamp: Math.floor((now - (23-i) * 60 * 60 * 1000) / 1000)
+                })),
+                metadata: { period: '最近24小时' }
+            });
+            break;
+        case 'errors':
+            charts.push({
+                chart_type: 'bar',
+                title: '错误类型分布',
+                data_points: [
+                    { label: '404错误', value: 125, unit: '次', timestamp: Math.floor(now / 1000) },
+                    { label: '500错误', value: 45, unit: '次', timestamp: Math.floor(now / 1000) },
+                    { label: '超时错误', value: 32, unit: '次', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { period: '今日' }
+            });
+            break;
+        case 'security':
+            charts.push({
+                chart_type: 'line',
+                title: '安全事件趋势',
+                data_points: Array.from({length: 7}, (_, i) => ({
+                    label: `第${i+1}天`,
+                    value: Math.floor(Math.random() * 20),
+                    unit: '次',
+                    timestamp: Math.floor((now - (6-i) * 24 * 60 * 60 * 1000) / 1000)
+                })),
+                metadata: { period: '最近7天' }
+            });
+            break;
+        case 'usage':
+            charts.push({
+                chart_type: 'area',
+                title: '用户活跃度',
+                data_points: Array.from({length: 12}, (_, i) => ({
+                    label: `${i+1}月`,
+                    value: Math.random() * 5000 + 2000,
+                    unit: '人',
+                    timestamp: Math.floor((now - (11-i) * 30 * 24 * 60 * 60 * 1000) / 1000)
+                })),
+                metadata: { period: '最近12个月' }
+            });
+            break;
+    }
+
+    return charts;
+}
+
+function generateStatisticsCharts(option) {
+    const charts = [];
+    const now = Date.now();
+
+    switch(option) {
+        case 'traffic':
+            charts.push({
+                chart_type: 'line',
+                title: '网站流量趋势',
+                data_points: Array.from({length: 30}, (_, i) => ({
+                    label: `第${i+1}天`,
+                    value: Math.random() * 10000 + 5000,
+                    unit: 'PV',
+                    timestamp: Math.floor((now - (29-i) * 24 * 60 * 60 * 1000) / 1000)
+                })),
+                metadata: { period: '最近30天' }
+            });
+            break;
+        case 'conversion':
+            charts.push({
+                chart_type: 'funnel',
+                title: '转化漏斗',
+                data_points: [
+                    { label: '访问', value: 10000, unit: '人', timestamp: Math.floor(now / 1000) },
+                    { label: '注册', value: 2500, unit: '人', timestamp: Math.floor(now / 1000) },
+                    { label: '购买', value: 750, unit: '人', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { conversion_rate: '7.5%' }
+            });
+            break;
+        case 'engagement':
+            charts.push({
+                chart_type: 'bar',
+                title: '用户参与度指标',
+                data_points: [
+                    { label: '平均停留时间', value: 4.5, unit: '分钟', timestamp: Math.floor(now / 1000) },
+                    { label: '页面浏览深度', value: 3.2, unit: '页', timestamp: Math.floor(now / 1000) },
+                    { label: '互动率', value: 15.8, unit: '%', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { period: '本周' }
+            });
+            break;
+        case 'retention':
+            charts.push({
+                chart_type: 'line',
+                title: '用户留存率',
+                data_points: [
+                    { label: '第1天', value: 100, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '第7天', value: 65, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '第30天', value: 35, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '第90天', value: 20, unit: '%', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { cohort: '新用户群体' }
+            });
+            break;
+    }
+
+    return charts;
+}
+
+function generateInsightsCharts(option) {
+    const charts = [];
+    const now = Date.now();
+
+    switch(option) {
+        case 'trends':
+            charts.push({
+                chart_type: 'line',
+                title: '趋势预测',
+                data_points: Array.from({length: 12}, (_, i) => ({
+                    label: `未来第${i+1}月`,
+                    value: Math.random() * 20000 + 10000,
+                    unit: '元',
+                    timestamp: Math.floor((now + i * 30 * 24 * 60 * 60 * 1000) / 1000)
+                })),
+                metadata: { confidence: '85%', model: 'ARIMA' }
+            });
+            break;
+        case 'recommendations':
+            charts.push({
+                chart_type: 'bar',
+                title: '推荐效果',
+                data_points: [
+                    { label: '点击率提升', value: 25.5, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '转化率提升', value: 18.2, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '收入提升', value: 32.1, unit: '%', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { algorithm: 'collaborative_filtering' }
+            });
+            break;
+        case 'anomalies':
+            charts.push({
+                chart_type: 'scatter',
+                title: '异常检测结果',
+                data_points: [
+                    { label: '正常数据', value: 95.2, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '轻微异常', value: 3.8, unit: '%', timestamp: Math.floor(now / 1000) },
+                    { label: '严重异常', value: 1.0, unit: '%', timestamp: Math.floor(now / 1000) }
+                ],
+                metadata: { algorithm: 'isolation_forest', threshold: '0.05' }
+            });
+            break;
+        case 'forecasting':
+            charts.push({
+                chart_type: 'line',
+                title: '预测分析',
+                data_points: Array.from({length: 6}, (_, i) => ({
+                    label: `Q${i+1}`,
+                    value: Math.random() * 50000 + 100000,
+                    unit: '元',
+                    timestamp: Math.floor((now + i * 90 * 24 * 60 * 60 * 1000) / 1000)
+                })),
+                metadata: { model: 'prophet', accuracy: '92%' }
+            });
+            break;
+    }
+
+    return charts;
+}
+
+// 生成汇总指标的函数
+function generateAnalyticsMetrics(option) {
+    switch(option) {
+        case 'sales':
+            return {
+                '总销售额': 156780,
+                '订单数量': 1245,
+                '平均客单价': 125.9,
+                '同比增长': 15.6
+            };
+        case 'revenue':
+            return {
+                '月收入': 234560,
+                '毛利率': 45.2,
+                '净利润': 89340,
+                '增长率': 12.8
+            };
+        case 'customers':
+            return {
+                '总客户数': 12450,
+                '新增客户': 890,
+                '活跃客户': 8760,
+                '客户满意度': 4.6
+            };
+        case 'products':
+            return {
+                '产品总数': 156,
+                '热销产品': 23,
+                '库存周转率': 8.5,
+                '退货率': 2.1
+            };
+        default:
+            return {};
+    }
+}
+
+function generateReportsMetrics(option) {
+    switch(option) {
+        case 'performance':
+            return {
+                '平均响应时间': 145.6,
+                '系统可用性': 99.8,
+                'CPU使用率': 65.2,
+                '内存使用率': 72.1
+            };
+        case 'errors':
+            return {
+                '总错误数': 234,
+                '错误率': 0.12,
+                '已修复': 198,
+                '待处理': 36
+            };
+        case 'security':
+            return {
+                '安全事件': 12,
+                '威胁等级': 2.3,
+                '防护成功率': 98.7,
+                '漏洞数量': 3
+            };
+        case 'usage':
+            return {
+                '日活用户': 8950,
+                '月活用户': 45600,
+                '使用时长': 25.6,
+                '功能使用率': 78.9
+            };
+        default:
+            return {};
+    }
+}
+
+function generateStatisticsMetrics(option) {
+    switch(option) {
+        case 'traffic':
+            return {
+                '总访问量': 156780,
+                '独立访客': 89450,
+                '页面浏览量': 345670,
+                '跳出率': 35.6
+            };
+        case 'conversion':
+            return {
+                '转化率': 7.5,
+                '注册转化': 25.0,
+                '购买转化': 30.0,
+                'ROI': 3.2
+            };
+        case 'engagement':
+            return {
+                '平均停留': 4.5,
+                '页面深度': 3.2,
+                '互动率': 15.8,
+                '分享率': 8.9
+            };
+        case 'retention':
+            return {
+                '7日留存': 65.0,
+                '30日留存': 35.0,
+                '90日留存': 20.0,
+                '年留存': 12.5
+            };
+        default:
+            return {};
+    }
+}
+
+function generateInsightsMetrics(option) {
+    switch(option) {
+        case 'trends':
+            return {
+                '预测准确率': 85.6,
+                '趋势强度': 7.8,
+                '置信度': 92.3,
+                '预测周期': 12
+            };
+        case 'recommendations':
+            return {
+                '推荐精度': 78.9,
+                '点击提升': 25.5,
+                '转化提升': 18.2,
+                '满意度': 4.3
+            };
+        case 'anomalies':
+            return {
+                '检测精度': 95.2,
+                '误报率': 2.1,
+                '异常数量': 15,
+                '处理率': 87.5
+            };
+        case 'forecasting':
+            return {
+                '预测精度': 92.1,
+                '模型得分': 8.7,
+                '预测范围': 6,
+                '更新频率': 7
+            };
+        default:
+            return {};
+    }
+}
+
 
 
 const port = 48159;
