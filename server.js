@@ -344,6 +344,60 @@ app.get('/api/user-details/:userId', (req, res) => {
     res.json(response);
 });
 
+// 单字段加密消息发送接口
+app.post('/api/send-message', (req, res) => {
+    const { sender, encryptedMessage, timestamp } = req.body;
+    const secretKey = 'single-field-2025';
+
+    // 验证必填字段
+    if (!sender || !encryptedMessage) {
+        return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    try {
+        // 解密消息内容
+        const decryptedBytes = CryptoJS.AES.decrypt(encryptedMessage, secretKey);
+        const decryptedMessage = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+        if (!decryptedMessage) {
+            return res.status(400).json({ error: '消息解密失败' });
+        }
+
+        // 模拟消息处理和存储
+        const messageId = Math.random().toString(36).substring(2, 15);
+
+        // 生成服务器回复消息（也加密）
+        const replyMessages = [
+            '消息已收到，谢谢！',
+            '收到您的消息，正在处理中...',
+            '感谢您的消息，我们会尽快回复。',
+            '您的消息很重要，已记录在案。',
+            '消息接收成功，系统已自动处理。'
+        ];
+
+        const randomReply = replyMessages[Math.floor(Math.random() * replyMessages.length)];
+        const encryptedReply = CryptoJS.AES.encrypt(randomReply, secretKey).toString();
+
+        // 构建响应
+        const response = {
+            success: true,
+            message: '消息发送成功',
+            messageId: messageId,
+            sender: sender,
+            timestamp: new Date().toISOString(),
+            // 服务器回复的加密消息
+            encryptedContent: encryptedReply,
+            // 解密后的原始消息（用于验证）
+            originalMessage: decryptedMessage
+        };
+
+        res.json(response);
+
+    } catch (error) {
+        res.status(400).json({ error: '消息处理失败', details: error.message });
+    }
+});
+
 
 
 const port = 48159;
