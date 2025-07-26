@@ -398,6 +398,99 @@ app.post('/api/send-message', (req, res) => {
     }
 });
 
+// 处理十六进制加密请求体的中间件
+const handleHexEncryptedBody = (req, res, next) => {
+    const secretKey = 'hex-body-encrypt-2025';
+
+    // 获取原始请求体（十六进制字符串）
+    let hexData = '';
+
+    req.on('data', chunk => {
+        hexData += chunk.toString();
+    });
+
+    req.on('end', () => {
+        try {
+            // 1. 从十六进制转换回加密的字符串
+            const encryptedData = CryptoJS.enc.Hex.parse(hexData).toString(CryptoJS.enc.Utf8);
+
+            // 2. 解密数据
+            const decryptedBytes = CryptoJS.AES.decrypt(encryptedData, secretKey);
+            const decryptedString = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+            if (!decryptedString) {
+                return res.status(400).json({ error: '请求体解密失败' });
+            }
+
+            // 3. 解析JSON
+            const jsonData = JSON.parse(decryptedString);
+
+            // 将解密后的数据添加到请求对象
+            req.decryptedBody = jsonData;
+            req.originalHexData = hexData;
+            req.encryptedData = encryptedData;
+
+            next();
+        } catch (error) {
+            res.status(400).json({ error: '请求体处理失败', details: error.message });
+        }
+    });
+};
+
+// 安全数据提交接口 - 处理十六进制加密的请求体
+app.post('/api/secure-submit', handleHexEncryptedBody, (req, res) => {
+    const data = req.decryptedBody;
+
+    // 验证必填字段
+    if (!data.companyName || !data.contactPerson || !data.email) {
+        return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.email)) {
+        return res.status(400).json({ error: '邮箱格式不正确' });
+    }
+
+    // 验证手机号格式
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (!phoneRegex.test(data.contactPhone)) {
+        return res.status(400).json({ error: '手机号格式不正确' });
+    }
+
+    // 验证预算范围
+    if (data.budget < 0 || data.budget > 10000000) {
+        return res.status(400).json({ error: '预算金额超出有效范围' });
+    }
+
+    // 模拟数据处理
+    const submissionId = Math.random().toString(36).substring(2, 15).toUpperCase();
+
+    // 构建响应
+    const response = {
+        success: true,
+        message: '数据提交成功',
+        submissionId: submissionId,
+        status: '已接收并处理',
+        timestamp: new Date().toISOString(),
+        securityLevel: '最高级别加密',
+        decryptedData: {
+            companyName: data.companyName,
+            contactPerson: data.contactPerson,
+            budget: data.budget,
+            urgency: data.urgency,
+            industry: data.industry
+        },
+        processingInfo: {
+            hexDataLength: req.originalHexData.length,
+            encryptedDataLength: req.encryptedData.length,
+            originalDataSize: JSON.stringify(data).length
+        }
+    };
+
+    res.json(response);
+});
+
 
 
 const port = 48159;
