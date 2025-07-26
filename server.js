@@ -491,6 +491,100 @@ app.post('/api/secure-submit', handleHexEncryptedBody, (req, res) => {
     res.json(response);
 });
 
+// 加密响应体并转换为十六进制的函数
+const encryptResponseToHex = (data) => {
+    const secretKey = 'hex-response-decrypt-2025';
+
+    // 1. 将数据转换为JSON字符串
+    const jsonString = JSON.stringify(data);
+
+    // 2. 使用AES加密
+    const encrypted = CryptoJS.AES.encrypt(jsonString, secretKey).toString();
+
+    // 3. 转换为十六进制
+    const hexEncoded = CryptoJS.enc.Utf8.parse(encrypted).toString(CryptoJS.enc.Hex);
+
+    return hexEncoded;
+};
+
+// 安全查询接口 - 返回十六进制加密的响应体
+app.get('/api/secure-query/:type', (req, res) => {
+    const queryType = req.params.type;
+
+    // 模拟不同类型的机密数据
+    const mockData = {
+        financial: {
+            type: 'financial',
+            reportType: '年度财务报表',
+            period: '2024年度',
+            revenue: 15680000,
+            profit: 3420000,
+            assets: 45600000,
+            liabilities: 12300000,
+            timestamp: new Date().toISOString(),
+            securityLevel: '机密',
+            department: '财务部',
+            approver: '财务总监'
+        },
+        employee: {
+            type: 'employee',
+            name: '李明',
+            employeeId: 'EMP001234',
+            department: '技术部',
+            position: '高级工程师',
+            salary: 25000,
+            bonus: 50000,
+            socialSecurity: '已缴纳',
+            timestamp: new Date().toISOString(),
+            securityLevel: '机密',
+            hireDate: '2020-03-15',
+            performance: 'A级'
+        },
+        customer: {
+            type: 'customer',
+            companyName: '科技创新集团有限公司',
+            customerId: 'CUST789012',
+            contactPerson: '王总经理',
+            phone: '13800138000',
+            email: 'wang@techgroup.com',
+            annualRevenue: 8900000,
+            creditRating: 'AAA',
+            timestamp: new Date().toISOString(),
+            securityLevel: '机密',
+            contractValue: 12000000,
+            paymentStatus: '正常'
+        },
+        project: {
+            type: 'project',
+            projectName: '智能数据管理系统',
+            projectId: 'PROJ456789',
+            manager: '张项目经理',
+            budget: 5600000,
+            spent: 3200000,
+            progress: 68,
+            startDate: '2024-01-15',
+            expectedEnd: '2025-06-30',
+            timestamp: new Date().toISOString(),
+            securityLevel: '机密',
+            team: '技术团队A组',
+            status: '进行中'
+        }
+    };
+
+    const data = mockData[queryType];
+
+    if (!data) {
+        return res.status(404).json({ error: '查询类型不存在' });
+    }
+
+    // 加密整个响应并转换为十六进制
+    const hexResponse = encryptResponseToHex(data);
+
+    // 设置响应头为纯文本，因为返回的是十六进制字符串
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(hexResponse);
+});
+
 
 
 const port = 48159;
