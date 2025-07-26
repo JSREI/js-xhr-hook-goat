@@ -1520,7 +1520,236 @@ function generateInsightsMetrics(option) {
     }
 }
 
+// 双向 Protocol Buffers 通信接口
+app.post('/api/bidirectional-protobuf', (req, res) => {
+    if (!protobufRoot) {
+        return res.status(500).json({ error: 'Protocol Buffers schema not initialized' });
+    }
 
+    // 获取原始请求体（二进制数据）
+    let bufferData = Buffer.alloc(0);
+
+    req.on('data', chunk => {
+        bufferData = Buffer.concat([bufferData, chunk]);
+    });
+
+    req.on('end', () => {
+        try {
+            // 定义双向protobuf schema
+            const bidirectionalSchema = `
+                syntax = "proto3";
+                package microservice;
+
+                message UserRequest {
+                    string action = 1;
+                    string user_id = 2;
+                    string name = 3;
+                    string email = 4;
+                    string role = 5;
+                    string status = 6;
+                }
+
+                message UserResponse {
+                    bool success = 1;
+                    string message = 2;
+                    string user_id = 3;
+                    string name = 4;
+                    string email = 5;
+                    string role = 6;
+                    string status = 7;
+                    int64 created_at = 8;
+                    int64 updated_at = 9;
+                }
+
+                message OrderRequest {
+                    string action = 1;
+                    string order_id = 2;
+                    string customer_id = 3;
+                    double amount = 4;
+                    string payment_method = 5;
+                    string status = 6;
+                }
+
+                message OrderResponse {
+                    bool success = 1;
+                    string message = 2;
+                    string order_id = 3;
+                    string customer_id = 4;
+                    double amount = 5;
+                    string payment_method = 6;
+                    string status = 7;
+                    int64 created_at = 8;
+                    string tracking_number = 9;
+                }
+
+                message AnalyticsRequest {
+                    string analytics_type = 1;
+                    string time_range = 2;
+                    string data_source = 3;
+                    string output_format = 4;
+                }
+
+                message AnalyticsResponse {
+                    bool success = 1;
+                    string message = 2;
+                    string report_id = 3;
+                    string analytics_type = 4;
+                    map<string, double> metrics = 5;
+                    string download_url = 6;
+                    int64 generated_at = 7;
+                }
+
+                message NotificationRequest {
+                    string notification_type = 1;
+                    string priority = 2;
+                    string recipient = 3;
+                    string template = 4;
+                    string content = 5;
+                }
+
+                message NotificationResponse {
+                    bool success = 1;
+                    string message = 2;
+                    string notification_id = 3;
+                    string status = 4;
+                    int64 sent_at = 5;
+                    string delivery_status = 6;
+                }
+
+                message ServiceRequest {
+                    string request_id = 1;
+                    int64 timestamp = 2;
+                    string service_name = 3;
+
+                    oneof request_data {
+                        UserRequest user_request = 10;
+                        OrderRequest order_request = 11;
+                        AnalyticsRequest analytics_request = 12;
+                        NotificationRequest notification_request = 13;
+                    }
+                }
+
+                message ServiceResponse {
+                    string request_id = 1;
+                    int64 timestamp = 2;
+                    bool success = 3;
+                    string service_name = 4;
+                    int32 status_code = 5;
+
+                    oneof response_data {
+                        UserResponse user_response = 10;
+                        OrderResponse order_response = 11;
+                        AnalyticsResponse analytics_response = 12;
+                        NotificationResponse notification_response = 13;
+                    }
+                }
+            `;
+
+            const bidirectionalRoot = protobuf.parse(bidirectionalSchema).root;
+
+            // 解析protobuf请求
+            const ServiceRequest = bidirectionalRoot.lookupType('microservice.ServiceRequest');
+            const requestMessage = ServiceRequest.decode(bufferData);
+            const requestData = ServiceRequest.toObject(requestMessage);
+
+            // 构建响应数据
+            const responseData = {
+                request_id: requestData.request_id,
+                timestamp: Math.floor(Date.now() / 1000),
+                success: true,
+                service_name: requestData.service_name,
+                status_code: 200
+            };
+
+            // 根据服务类型处理请求并构建响应
+            switch(requestData.service_name) {
+                case 'user-management':
+                    if (requestData.user_request) {
+                        const userReq = requestData.user_request;
+                        responseData.user_response = {
+                            success: true,
+                            message: `用户${userReq.action}操作成功`,
+                            user_id: userReq.user_id,
+                            name: userReq.name,
+                            email: userReq.email,
+                            role: userReq.role,
+                            status: userReq.status,
+                            created_at: Math.floor(Date.now() / 1000),
+                            updated_at: Math.floor(Date.now() / 1000)
+                        };
+                    }
+                    break;
+
+                case 'order-processing':
+                    if (requestData.order_request) {
+                        const orderReq = requestData.order_request;
+                        responseData.order_response = {
+                            success: true,
+                            message: `订单${orderReq.action}操作成功`,
+                            order_id: orderReq.order_id,
+                            customer_id: orderReq.customer_id,
+                            amount: orderReq.amount,
+                            payment_method: orderReq.payment_method,
+                            status: orderReq.status === 'pending' ? 'processing' : orderReq.status,
+                            created_at: Math.floor(Date.now() / 1000),
+                            tracking_number: 'TRK' + Math.random().toString(36).substring(2, 15).toUpperCase()
+                        };
+                    }
+                    break;
+
+                case 'data-analytics':
+                    if (requestData.analytics_request) {
+                        const analyticsReq = requestData.analytics_request;
+                        responseData.analytics_response = {
+                            success: true,
+                            message: `${analyticsReq.analytics_type}分析完成`,
+                            report_id: 'RPT' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                            analytics_type: analyticsReq.analytics_type,
+                            metrics: {
+                                '总数据量': Math.floor(Math.random() * 100000) + 50000,
+                                '处理时间': Math.floor(Math.random() * 60) + 30,
+                                '准确率': Math.floor(Math.random() * 20) + 80,
+                                '覆盖率': Math.floor(Math.random() * 30) + 70
+                            },
+                            download_url: `https://reports.example.com/download/${Math.random().toString(36).substring(2, 15)}`,
+                            generated_at: Math.floor(Date.now() / 1000)
+                        };
+                    }
+                    break;
+
+                case 'notification':
+                    if (requestData.notification_request) {
+                        const notificationReq = requestData.notification_request;
+                        responseData.notification_response = {
+                            success: true,
+                            message: `${notificationReq.notification_type}通知发送成功`,
+                            notification_id: 'NOT' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                            status: 'sent',
+                            sent_at: Math.floor(Date.now() / 1000),
+                            delivery_status: 'delivered'
+                        };
+                    }
+                    break;
+
+                default:
+                    responseData.success = false;
+                    responseData.status_code = 400;
+            }
+
+            // 序列化响应为protobuf
+            const ServiceResponse = bidirectionalRoot.lookupType('microservice.ServiceResponse');
+            const responseMessage = ServiceResponse.create(responseData);
+            const responseBuffer = ServiceResponse.encode(responseMessage).finish();
+
+            // 设置响应头并发送二进制数据
+            res.setHeader('Content-Type', 'application/x-protobuf');
+            res.send(responseBuffer);
+
+        } catch (error) {
+            res.status(400).json({ error: '双向 Protocol Buffers 通信失败', details: error.message });
+        }
+    });
+});
 
 const port = 48159;
 
