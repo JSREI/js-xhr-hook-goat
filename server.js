@@ -3,6 +3,7 @@ const app = express();
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const CryptoJS = require('crypto-js');
+const protobuf = require('protobufjs');
 const {join} = require("node:path");
 
 // 设置静态文件目录
@@ -716,9 +717,220 @@ app.post('/api/secure-operation', handleBidirectionalHexEncryption, (req, res) =
     res.send(hexResponse);
 });
 
+// Protocol Buffers schema
+let protobufRoot = null;
+
+// 初始化protobuf schema
+const initProtobufSchema = async () => {
+    try {
+        const protoSchema = `
+            syntax = "proto3";
+            package api;
+
+            message UserInfo {
+                string name = 1;
+                string email = 2;
+                int32 age = 3;
+                string phone = 4;
+                string address = 5;
+                string company = 6;
+                string position = 7;
+                int64 salary = 8;
+                repeated string skills = 9;
+                map<string, string> metadata = 10;
+            }
+
+            message ProductInfo {
+                string name = 1;
+                string description = 2;
+                double price = 3;
+                string category = 4;
+                string brand = 5;
+                int32 stock = 6;
+                repeated string tags = 7;
+                map<string, string> attributes = 8;
+            }
+
+            message OrderInfo {
+                string order_id = 1;
+                string customer_name = 2;
+                string customer_email = 3;
+                repeated ProductInfo products = 4;
+                double total_amount = 5;
+                string status = 6;
+                int64 created_at = 7;
+                string shipping_address = 8;
+                string payment_method = 9;
+            }
+
+            message ApiRequest {
+                string request_id = 1;
+                int64 timestamp = 2;
+                string operation = 3;
+
+                oneof data {
+                    UserInfo user_info = 10;
+                    ProductInfo product_info = 11;
+                    OrderInfo order_info = 12;
+                }
+            }
+
+            message ApiResponse {
+                string request_id = 1;
+                int64 timestamp = 2;
+                bool success = 3;
+                string message = 4;
+                int32 code = 5;
+
+                oneof data {
+                    UserInfo user_info = 10;
+                    ProductInfo product_info = 11;
+                    OrderInfo order_info = 12;
+                }
+            }
+        `;
+
+        protobufRoot = protobuf.parse(protoSchema).root;
+        console.log('Protocol Buffers schema initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize protobuf schema:', error);
+    }
+};
+
+// 处理protobuf请求体的中间件
+const handleProtobufRequest = (req, res, next) => {
+    if (!protobufRoot) {
+        return res.status(500).json({ error: 'Protocol Buffers schema not initialized' });
+    }
+
+    // 获取原始请求体（二进制数据）
+    let bufferData = Buffer.alloc(0);
+
+    req.on('data', chunk => {
+        bufferData = Buffer.concat([bufferData, chunk]);
+    });
+
+    req.on('end', () => {
+        try {
+            // 解析protobuf请求
+            const ApiRequest = protobufRoot.lookupType('api.ApiRequest');
+            const message = ApiRequest.decode(bufferData);
+            const requestData = ApiRequest.toObject(message);
+
+            // 将解析后的数据添加到请求对象
+            req.protobufData = requestData;
+            req.originalBuffer = bufferData;
+
+            // 添加响应序列化函数
+            req.sendProtobufResponse = (responseData) => {
+                try {
+                    const ApiResponse = protobufRoot.lookupType('api.ApiResponse');
+                    const responseMessage = ApiResponse.create(responseData);
+                    const responseBuffer = ApiResponse.encode(responseMessage).finish();
+
+                    res.setHeader('Content-Type', 'application/x-protobuf');
+                    res.send(responseBuffer);
+                } catch (error) {
+                    res.status(500).json({ error: '响应序列化失败', details: error.message });
+                }
+            };
+
+            next();
+        } catch (error) {
+            res.status(400).json({ error: 'Protocol Buffers 解析失败', details: error.message });
+        }
+    });
+};
+
+// Protocol Buffers API接口
+app.post('/api/protobuf', handleProtobufRequest, (req, res) => {
+    const data = req.protobufData;
+
+    // 验证必填字段
+    if (!data.request_id || !data.operation) {
+        return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    // 构建响应数据
+    let responseData = {
+        request_id: data.request_id,
+        timestamp: Math.floor(Date.now() / 1000),
+        success: true,
+        message: 'Protocol Buffers 请求处理成功',
+        code: 200
+    };
+
+    // 根据操作类型处理数据并构建响应
+    switch(data.operation) {
+        case 'user':
+            if (data.user_info) {
+                // 模拟用户数据处理
+                responseData.user_info = {
+                    ...data.user_info,
+                    // 添加一些服务器端生成的数据
+                    metadata: {
+                        ...data.user_info.metadata,
+                        'user_id': 'USR' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                        'created_at': new Date().toISOString(),
+                        'status': 'active'
+                    }
+                };
+                responseData.message = `用户 ${data.user_info.name} 信息处理成功`;
+            }
+            break;
+
+        case 'product':
+            if (data.product_info) {
+                // 模拟产品数据处理
+                responseData.product_info = {
+                    ...data.product_info,
+                    // 添加一些服务器端生成的数据
+                    attributes: {
+                        ...data.product_info.attributes,
+                        'product_id': 'PRD' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                        'created_at': new Date().toISOString(),
+                        'status': 'available'
+                    }
+                };
+                responseData.message = `产品 ${data.product_info.name} 信息处理成功`;
+            }
+            break;
+
+        case 'order':
+            if (data.order_info) {
+                // 模拟订单数据处理
+                responseData.order_info = {
+                    ...data.order_info,
+                    // 更新订单状态
+                    status: 'confirmed',
+                    // 添加确认时间
+                    created_at: Math.floor(Date.now() / 1000)
+                };
+                responseData.message = `订单 ${data.order_info.order_id} 处理成功`;
+            }
+            break;
+
+        default:
+            responseData.success = false;
+            responseData.message = '不支持的操作类型';
+            responseData.code = 400;
+    }
+
+    // 发送protobuf响应
+    req.sendProtobufResponse(responseData);
+});
+
 
 
 const port = 48159;
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-});
+
+// 启动服务器并初始化protobuf
+const startServer = async () => {
+    await initProtobufSchema();
+
+    app.listen(port, () => {
+        console.log(`Server is running on http://localhost:${port}`);
+    });
+};
+
+startServer();
