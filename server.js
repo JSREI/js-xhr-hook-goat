@@ -585,6 +585,137 @@ app.get('/api/secure-query/:type', (req, res) => {
     res.send(hexResponse);
 });
 
+// 处理双向十六进制加密通信的中间件
+const handleBidirectionalHexEncryption = (req, res, next) => {
+    const secretKey = 'bidirectional-hex-2025';
+
+    // 获取原始请求体（十六进制字符串）
+    let hexData = '';
+
+    req.on('data', chunk => {
+        hexData += chunk.toString();
+    });
+
+    req.on('end', () => {
+        try {
+            // 1. 从十六进制转换回加密的字符串
+            const encryptedData = CryptoJS.enc.Hex.parse(hexData).toString(CryptoJS.enc.Utf8);
+
+            // 2. 解密数据
+            const decryptedBytes = CryptoJS.AES.decrypt(encryptedData, secretKey);
+            const decryptedString = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+            if (!decryptedString) {
+                return res.status(400).json({ error: '请求体解密失败' });
+            }
+
+            // 3. 解析JSON
+            const jsonData = JSON.parse(decryptedString);
+
+            // 将解密后的数据添加到请求对象
+            req.decryptedBody = jsonData;
+            req.originalHexData = hexData;
+            req.encryptedData = encryptedData;
+
+            // 添加响应加密函数
+            req.encryptResponse = (responseData) => {
+                const jsonString = JSON.stringify(responseData);
+                const encrypted = CryptoJS.AES.encrypt(jsonString, secretKey).toString();
+                const hexEncoded = CryptoJS.enc.Utf8.parse(encrypted).toString(CryptoJS.enc.Hex);
+                return hexEncoded;
+            };
+
+            next();
+        } catch (error) {
+            res.status(400).json({ error: '请求体处理失败', details: error.message });
+        }
+    });
+};
+
+// 安全操作接口 - 双向十六进制加密通信
+app.post('/api/secure-operation', handleBidirectionalHexEncryption, (req, res) => {
+    const data = req.decryptedBody;
+
+    // 验证必填字段
+    if (!data.operation || !data.timestamp) {
+        return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    // 生成操作ID
+    const operationId = Math.random().toString(36).substring(2, 15).toUpperCase();
+
+    // 根据操作类型生成不同的响应
+    let responseData = {
+        success: true,
+        operationId: operationId,
+        operation: data.operation,
+        status: '执行成功',
+        executionTime: new Date().toISOString(),
+        securityLevel: 'TOP_SECRET',
+        requestId: data.requestId
+    };
+
+    // 根据操作类型添加特定的响应数据
+    switch(data.operation) {
+        case 'transfer':
+            responseData.details = {
+                amount: data.amount,
+                fee: Math.round(data.amount * 0.001), // 0.1% 手续费
+                transactionId: 'TXN' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                fromAccount: data.fromAccount.replace(/(\d{4})\d{8}(\d{4})/, '$1****$2'),
+                toAccount: data.toAccount.replace(/(\d{4})\d{8}(\d{4})/, '$1****$2'),
+                currency: data.currency,
+                estimatedArrival: '2-24小时'
+            };
+            break;
+
+        case 'contract':
+            responseData.details = {
+                contractNumber: 'CON' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                signatureStatus: '已签署',
+                legalStatus: '具有法律效力',
+                digitalSignature: 'SHA256:' + Math.random().toString(36).substring(2, 15),
+                contractValue: data.value,
+                effectiveDate: new Date().toISOString().split('T')[0]
+            };
+            break;
+
+        case 'audit':
+            responseData.details = {
+                reportId: 'AUD' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                issuesFound: Math.floor(Math.random() * 5) + 1,
+                riskLevel: ['低', '中', '高'][Math.floor(Math.random() * 3)],
+                auditScore: Math.floor(Math.random() * 20) + 80,
+                recommendations: '建议加强密码策略和访问控制',
+                nextAuditDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            };
+            break;
+
+        case 'backup':
+            responseData.details = {
+                backupId: 'BAK' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                backupSize: (Math.random() * 100 + 50).toFixed(2) + ' GB',
+                integrityCheck: '通过',
+                compressionRatio: (Math.random() * 0.3 + 0.6).toFixed(2),
+                estimatedRestoreTime: Math.floor(Math.random() * 60 + 30) + '分钟',
+                storageLocation: data.location === 'cloud' ? '云端存储' : '本地存储'
+            };
+            break;
+
+        default:
+            responseData.details = {
+                message: '操作类型未识别，但已安全处理'
+            };
+    }
+
+    // 加密响应并返回十六进制
+    const hexResponse = req.encryptResponse(responseData);
+
+    // 设置响应头为纯文本
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(hexResponse);
+});
+
 
 
 const port = 48159;
