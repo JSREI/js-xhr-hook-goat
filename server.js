@@ -100,6 +100,72 @@ app.get('/api/search-products', decryptQueryParams, (req, res) => {
     });
 });
 
+// 验证登录表单签名的中间件
+const validateLoginSign = (req, res, next) => {
+    const { username, password, timestamp, sign } = req.body;
+    const secretKey = 'form-encrypt-key-2025';
+
+    if (!sign) {
+        return res.status(400).json({ error: 'Missing signature' });
+    }
+
+    try {
+        // 生成期望的签名
+        const signString = `${username}${password}${timestamp}`;
+        const expectedSign = CryptoJS.HmacSHA256(signString, secretKey).toString();
+
+        if (sign !== expectedSign) {
+            return res.status(403).json({ error: 'Invalid signature' });
+        }
+
+        // 解密密码
+        const decryptedPassword = CryptoJS.AES.decrypt(password, secretKey).toString(CryptoJS.enc.Utf8);
+        req.body.decryptedPassword = decryptedPassword;
+
+        next();
+    } catch (error) {
+        res.status(400).json({ error: 'Invalid encrypted data', details: error.message });
+    }
+};
+
+// 登录接口
+app.post('/api/login', validateLoginSign, (req, res) => {
+    const { username, decryptedPassword, rememberMe } = req.body;
+
+    // 模拟用户数据库
+    const users = [
+        { id: 1, username: 'admin@example.com', password: '123456', name: '管理员' },
+        { id: 2, username: 'user@example.com', password: 'password', name: '普通用户' },
+        { id: 3, username: 'test', password: 'test123', name: '测试用户' }
+    ];
+
+    // 验证用户名和密码
+    const user = users.find(u =>
+        (u.username === username || u.username.split('@')[0] === username) &&
+        u.password === decryptedPassword
+    );
+
+    if (!user) {
+        return res.status(401).json({ error: '用户名或密码错误' });
+    }
+
+    // 生成模拟token
+    const token = CryptoJS.HmacSHA256(`${user.id}${Date.now()}`, 'token-secret').toString();
+
+    res.json({
+        success: true,
+        message: '登录成功',
+        user: {
+            id: user.id,
+            username: user.name,
+            email: user.username
+        },
+        token: token,
+        loginTime: new Date().toISOString(),
+        rememberMe: rememberMe
+    });
+});
+
 
 
 const port = 48159;
