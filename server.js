@@ -166,6 +166,87 @@ app.post('/api/login', validateLoginSign, (req, res) => {
     });
 });
 
+// 解密JSON字段的中间件
+const decryptJsonFields = (req, res, next) => {
+    const secretKey = 'json-field-encrypt-2025';
+    const { phone, idCard, bankCard } = req.body;
+
+    try {
+        // 解密敏感字段
+        const decryptedPhone = CryptoJS.AES.decrypt(phone, secretKey).toString(CryptoJS.enc.Utf8);
+        const decryptedIdCard = CryptoJS.AES.decrypt(idCard, secretKey).toString(CryptoJS.enc.Utf8);
+        const decryptedBankCard = CryptoJS.AES.decrypt(bankCard, secretKey).toString(CryptoJS.enc.Utf8);
+
+        // 验证解密结果
+        if (!decryptedPhone || !decryptedIdCard || !decryptedBankCard) {
+            return res.status(400).json({ error: '解密敏感字段失败' });
+        }
+
+        // 将解密后的数据添加到请求对象
+        req.body.decryptedFields = {
+            phone: decryptedPhone,
+            idCard: decryptedIdCard,
+            bankCard: decryptedBankCard
+        };
+
+        next();
+    } catch (error) {
+        res.status(400).json({ error: '解密失败', details: error.message });
+    }
+};
+
+// 用户信息提交接口
+app.post('/api/submit-user-info', decryptJsonFields, (req, res) => {
+    const { name, email, city, age, remarks, timestamp, decryptedFields } = req.body;
+
+    // 验证必填字段
+    if (!name || !email || !decryptedFields.phone || !decryptedFields.idCard) {
+        return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    // 验证手机号格式
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (!phoneRegex.test(decryptedFields.phone)) {
+        return res.status(400).json({ error: '手机号格式不正确' });
+    }
+
+    // 验证身份证号格式（简单验证）
+    const idCardRegex = /^\d{17}[\dX]$/;
+    if (!idCardRegex.test(decryptedFields.idCard)) {
+        return res.status(400).json({ error: '身份证号格式不正确' });
+    }
+
+    // 验证银行卡号格式（简单验证）
+    const bankCardRegex = /^\d{16,19}$/;
+    if (!bankCardRegex.test(decryptedFields.bankCard)) {
+        return res.status(400).json({ error: '银行卡号格式不正确' });
+    }
+
+    // 模拟保存到数据库
+    const userId = Math.floor(Math.random() * 100000) + 10000;
+
+    // 返回成功响应
+    res.json({
+        success: true,
+        message: '用户信息提交成功',
+        userId: userId,
+        submitTime: new Date().toISOString(),
+        status: '已处理',
+        decryptedData: {
+            phone: decryptedFields.phone,
+            idCard: decryptedFields.idCard.replace(/(\d{6})\d{8}(\d{4})/, '$1********$2'), // 脱敏显示
+            bankCard: decryptedFields.bankCard.replace(/(\d{4})\d{8,11}(\d{4})/, '$1****$2') // 脱敏显示
+        },
+        userInfo: {
+            name: name,
+            email: email,
+            city: city,
+            age: age,
+            remarks: remarks
+        }
+    });
+});
+
 
 
 const port = 48159;
