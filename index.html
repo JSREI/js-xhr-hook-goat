@@ -1,32 +1,583 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Script Hook Goat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XHR Hook Goat - XHR逆向练习靶场</title>
+    <meta name="description" content="专业的XHR逆向工程练习平台，涵盖从基础到高级的完整技术栈，包括加密、签名、协议缓冲区、拦截器等16个实战案例">
+    <meta name="keywords" content="XHR Hook, 逆向工程, 网络安全, 加密解密, JavaScript, API安全, 渗透测试">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px;
+        }
+
+        .header .subtitle {
+            font-size: 1.3rem;
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+
+        .header .description {
+            font-size: 1.1rem;
+            color: #34495e;
+            max-width: 800px;
+            margin: 0 auto 30px;
+            line-height: 1.8;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .categories {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .category {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .category:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .category-icon {
+            font-size: 2.5rem;
+            margin-right: 15px;
+        }
+
+        .category-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .category-description {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .case-list {
+            list-style: none;
+        }
+
+        .case-item {
+            margin-bottom: 12px;
+        }
+
+        .case-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #2c3e50;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .case-link:hover {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: translateX(5px);
+            border-left-color: #fff;
+        }
+
+        .case-number {
+            background: #667eea;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .case-link:hover .case-number {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .case-title {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .case-difficulty {
+            font-size: 0.8rem;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        .difficulty-basic { background: #d4edda; color: #155724; }
+        .difficulty-intermediate { background: #fff3cd; color: #856404; }
+        .difficulty-advanced { background: #f8d7da; color: #721c24; }
+        .difficulty-expert { background: #d1ecf1; color: #0c5460; }
+
+        .footer {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+
+        .footer-content {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+
+        .tech-stack {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tech-tag {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5rem;
+            }
+
+            .header .subtitle {
+                font-size: 1.1rem;
+            }
+
+            .stats {
+                gap: 15px;
+            }
+
+            .stat-item {
+                padding: 10px 20px;
+            }
+
+            .categories {
+                grid-template-columns: 1fr;
+            }
+
+            .case-link {
+                padding: 10px 12px;
+            }
+
+            .tech-stack {
+                gap: 10px;
+            }
+        }
+
+        .progress-indicator {
+            background: #e9ecef;
+            height: 8px;
+            border-radius: 4px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            height: 100%;
+            width: 100%;
+            border-radius: 4px;
+            animation: progressAnimation 2s ease-in-out;
+        }
+
+        @keyframes progressAnimation {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
     </style>
 </head>
 <body>
-<h1>XHR Hook Goat Cases</h1>
-<p>用于练习XHR逆向的靶场案例集合</p>
-<ol>
-    <li><a href="query-string-param-sign.html">请求参数签名验证 (Query String Parameter Sign)</a></li>
-    <li><a href="query-string-param-encrypt.html">查询参数加密 (Query String Parameter Encryption)</a></li>
-    <li><a href="form-body-encrypt.html">表单参数加密 (Form Body Parameter Encryption)</a></li>
-    <li><a href="json-body-field-encrypt.html">JSON字段加密 (JSON Body Field Encryption)</a></li>
-    <li><a href="response-field-decrypt.html">响应字段解密 (Response Field Decryption)</a></li>
-    <li><a href="single-field-encrypt.html">单字段加密 (Single Field Encryption)</a></li>
-    <li><a href="hex-body-encrypt.html">十六进制请求体加密 (Hex Body Encryption)</a></li>
-    <li><a href="hex-response-decrypt.html">十六进制响应体解密 (Hex Response Decryption)</a></li>
-    <li><a href="bidirectional-hex-encrypt.html">双向十六进制加密 (Bidirectional Hex Encryption)</a></li>
-    <li><a href="protobuf-request.html">Protocol Buffers 请求体 (Protocol Buffers Request)</a></li>
-    <li><a href="protobuf-response.html">Protocol Buffers 响应体 (Protocol Buffers Response)</a></li>
-    <li><a href="bidirectional-protobuf.html">双向 Protocol Buffers (Bidirectional Protocol Buffers)</a></li>
-    <li><a href="header-sign.html">请求头签名验证 (Request Header Signing)</a></li>
-    <li><a href="response-header-cookie.html">响应头加密Cookie (Response Header Cookie)</a></li>
-    <li><a href="interceptor-encryption.html">拦截器自动签名 (Interceptor Encryption)</a></li>
-    <li><a href="video-segment-encryption.html">加密视频片段 (Video Segment Encryption)</a></li>
-</ol>
+    <div class="container">
+        <header class="header">
+            <h1>🎯 XHR Hook Goat</h1>
+            <p class="subtitle">专业的XHR逆向工程练习靶场</p>
+            <p class="description">
+                涵盖从基础到高级的完整XHR逆向技术栈，包括加密解密、签名验证、协议缓冲区、拦截器自动化、流媒体DRM等16个实战案例。
+                适合安全研究人员、渗透测试工程师、前端开发者学习和练习。
+            </p>
+
+            <div class="progress-indicator">
+                <div class="progress-fill"></div>
+            </div>
+
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-number">16</span>
+                    <span class="stat-label">实战案例</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">100%</span>
+                    <span class="stat-label">完成度</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">10+</span>
+                    <span class="stat-label">技术栈</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">4</span>
+                    <span class="stat-label">难度等级</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="categories">
+            <!-- 基础加密案例 -->
+            <section class="category">
+                <div class="category-header">
+                    <span class="category-icon">🔐</span>
+                    <h2 class="category-title">基础加密案例</h2>
+                </div>
+                <p class="category-description">
+                    从最基础的参数签名验证开始，逐步学习各种加密技术的应用场景和实现方法。
+                </p>
+                <ul class="case-list">
+                    <li class="case-item">
+                        <a href="query-string-param-sign.html" class="case-link">
+                            <span class="case-number">1</span>
+                            <span class="case-title">请求参数签名验证</span>
+                            <span class="case-difficulty difficulty-basic">基础</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="query-string-param-encrypt.html" class="case-link">
+                            <span class="case-number">2</span>
+                            <span class="case-title">查询参数加密</span>
+                            <span class="case-difficulty difficulty-basic">基础</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="form-body-encrypt.html" class="case-link">
+                            <span class="case-number">3</span>
+                            <span class="case-title">表单参数加密</span>
+                            <span class="case-difficulty difficulty-basic">基础</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="single-field-encrypt.html" class="case-link">
+                            <span class="case-number">6</span>
+                            <span class="case-title">单字段加密</span>
+                            <span class="case-difficulty difficulty-basic">基础</span>
+                        </a>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- 中级加密案例 -->
+            <section class="category">
+                <div class="category-header">
+                    <span class="category-icon">🛡️</span>
+                    <h2 class="category-title">中级加密案例</h2>
+                </div>
+                <p class="category-description">
+                    学习JSON字段加密、响应解密等中级技术，掌握双向数据保护的核心原理。
+                </p>
+                <ul class="case-list">
+                    <li class="case-item">
+                        <a href="json-body-field-encrypt.html" class="case-link">
+                            <span class="case-number">4</span>
+                            <span class="case-title">JSON字段加密</span>
+                            <span class="case-difficulty difficulty-intermediate">中级</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="response-field-decrypt.html" class="case-link">
+                            <span class="case-number">5</span>
+                            <span class="case-title">响应字段解密</span>
+                            <span class="case-difficulty difficulty-intermediate">中级</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="header-sign.html" class="case-link">
+                            <span class="case-number">13</span>
+                            <span class="case-title">请求头签名验证</span>
+                            <span class="case-difficulty difficulty-intermediate">中级</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="response-header-cookie.html" class="case-link">
+                            <span class="case-number">14</span>
+                            <span class="case-title">响应头加密Cookie</span>
+                            <span class="case-difficulty difficulty-intermediate">中级</span>
+                        </a>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- 高级加密案例 -->
+            <section class="category">
+                <div class="category-header">
+                    <span class="category-icon">⚡</span>
+                    <h2 class="category-title">高级加密案例</h2>
+                </div>
+                <p class="category-description">
+                    掌握十六进制编码、整体加密等高级技术，学习复杂的双向加密通信方案。
+                </p>
+                <ul class="case-list">
+                    <li class="case-item">
+                        <a href="hex-body-encrypt.html" class="case-link">
+                            <span class="case-number">7</span>
+                            <span class="case-title">十六进制请求体加密</span>
+                            <span class="case-difficulty difficulty-advanced">高级</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="hex-response-decrypt.html" class="case-link">
+                            <span class="case-number">8</span>
+                            <span class="case-title">十六进制响应体解密</span>
+                            <span class="case-difficulty difficulty-advanced">高级</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="bidirectional-hex-encrypt.html" class="case-link">
+                            <span class="case-number">9</span>
+                            <span class="case-title">双向十六进制加密</span>
+                            <span class="case-difficulty difficulty-advanced">高级</span>
+                        </a>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- 专家级案例 -->
+            <section class="category">
+                <div class="category-header">
+                    <span class="category-icon">🚀</span>
+                    <h2 class="category-title">专家级案例</h2>
+                </div>
+                <p class="category-description">
+                    探索Protocol Buffers、拦截器自动化、流媒体DRM等前沿技术，达到专家水平。
+                </p>
+                <ul class="case-list">
+                    <li class="case-item">
+                        <a href="protobuf-request.html" class="case-link">
+                            <span class="case-number">10</span>
+                            <span class="case-title">Protocol Buffers 请求体</span>
+                            <span class="case-difficulty difficulty-expert">专家</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="protobuf-response.html" class="case-link">
+                            <span class="case-number">11</span>
+                            <span class="case-title">Protocol Buffers 响应体</span>
+                            <span class="case-difficulty difficulty-expert">专家</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="bidirectional-protobuf.html" class="case-link">
+                            <span class="case-number">12</span>
+                            <span class="case-title">双向 Protocol Buffers</span>
+                            <span class="case-difficulty difficulty-expert">专家</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="interceptor-encryption.html" class="case-link">
+                            <span class="case-number">15</span>
+                            <span class="case-title">拦截器自动签名</span>
+                            <span class="case-difficulty difficulty-expert">专家</span>
+                        </a>
+                    </li>
+                    <li class="case-item">
+                        <a href="video-segment-encryption.html" class="case-link">
+                            <span class="case-number">16</span>
+                            <span class="case-title">加密视频片段</span>
+                            <span class="case-difficulty difficulty-expert">专家</span>
+                        </a>
+                    </li>
+                </ul>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <div class="footer-content">
+                <h3 style="color: #2c3e50; margin-bottom: 15px;">🔧 技术栈覆盖</h3>
+                <p style="margin-bottom: 20px;">
+                    本项目涵盖了现代Web应用中最核心的XHR逆向技术，从传统加密到前沿协议，为您提供完整的学习路径。
+                </p>
+            </div>
+
+            <div class="tech-stack">
+                <span class="tech-tag">AES加密</span>
+                <span class="tech-tag">HMAC签名</span>
+                <span class="tech-tag">MD5验证</span>
+                <span class="tech-tag">Base64编码</span>
+                <span class="tech-tag">十六进制</span>
+                <span class="tech-tag">Protocol Buffers</span>
+                <span class="tech-tag">XMLHttpRequest</span>
+                <span class="tech-tag">拦截器</span>
+                <span class="tech-tag">流媒体DRM</span>
+                <span class="tech-tag">CryptoJS</span>
+            </div>
+
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e9ecef;">
+                <p style="color: #7f8c8d; font-size: 0.9rem;">
+                    🎯 <strong>XHR Hook Goat</strong> - 专业的XHR逆向工程练习靶场<br>
+                    适合安全研究人员、渗透测试工程师、前端开发者学习和实践<br>
+                    <span style="font-size: 0.8rem; opacity: 0.8;">
+                        涵盖金融、企业、流媒体等多个行业的真实应用场景
+                    </span>
+                </p>
+
+                <div style="margin-top: 20px;">
+                    <div style="display: inline-block; background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; font-weight: 500;">
+                        ✅ 16/16 案例完成 (100%)
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // 添加一些交互效果
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为案例链接添加点击统计
+            const caseLinks = document.querySelectorAll('.case-link');
+            caseLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    const caseTitle = this.querySelector('.case-title').textContent;
+                    console.log(`访问案例: ${caseTitle}`);
+                });
+            });
+
+            // 添加滚动动画效果
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver(function(entries) {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, observerOptions);
+
+            // 为分类卡片添加动画
+            const categories = document.querySelectorAll('.category');
+            categories.forEach((category, index) => {
+                category.style.opacity = '0';
+                category.style.transform = 'translateY(30px)';
+                category.style.transition = `opacity 0.6s ease ${index * 0.1}s, transform 0.6s ease ${index * 0.1}s`;
+                observer.observe(category);
+            });
+
+            // 统计信息动画
+            const statNumbers = document.querySelectorAll('.stat-number');
+            statNumbers.forEach(stat => {
+                const finalValue = stat.textContent;
+                if (!isNaN(parseInt(finalValue))) {
+                    const finalNum = parseInt(finalValue);
+                    let currentNum = 0;
+                    const increment = finalNum / 30;
+
+                    const timer = setInterval(() => {
+                        currentNum += increment;
+                        if (currentNum >= finalNum) {
+                            stat.textContent = finalValue;
+                            clearInterval(timer);
+                        } else {
+                            stat.textContent = Math.floor(currentNum);
+                        }
+                    }, 50);
+                }
+            });
+        });
+    </script>
 </body>
 </html>
