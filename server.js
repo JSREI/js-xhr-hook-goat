@@ -2019,6 +2019,210 @@ function getExpirySeconds(expiry) {
     }
 }
 
+// 拦截器加密API端点 - 通用处理函数
+function handleInterceptorRequest(serviceName, req, res) {
+    try {
+        const requestData = req.body;
+        const currentTime = Math.floor(Date.now() / 1000);
+
+        // 验证拦截器添加的必要参数
+        if (!requestData.sign || !requestData.timestamp || !requestData.nonce || !requestData.interceptor_id) {
+            return res.status(400).json({
+                error: '缺少拦截器签名参数',
+                required_params: ['sign', 'timestamp', 'nonce', 'interceptor_id']
+            });
+        }
+
+        // 检查时间戳（防止重放攻击）
+        const requestTime = parseInt(requestData.timestamp);
+        const timeDiff = Math.abs(currentTime - requestTime);
+
+        if (timeDiff > 300) { // 5分钟有效期
+            return res.status(401).json({
+                error: '请求时间戳过期',
+                current_time: currentTime,
+                request_time: requestTime,
+                time_diff: timeDiff
+            });
+        }
+
+        // 验证签名
+        const secretKey = 'interceptor-secret-key-2025';
+        const isValid = verifyInterceptorSignature(requestData, secretKey);
+
+        if (!isValid) {
+            return res.status(401).json({
+                error: '拦截器签名验证失败',
+                signature_valid: false
+            });
+        }
+
+        // 构建响应数据
+        const responseData = {
+            request_id: 'REQ' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+            timestamp: currentTime,
+            signature_valid: true,
+            service_name: serviceName,
+            interceptor_id: requestData.interceptor_id,
+            client_id: requestData.client_id
+        };
+
+        // 根据服务类型生成不同的响应
+        switch(serviceName) {
+            case 'user-service':
+                responseData.service_result = {
+                    status: 'success',
+                    user_count: Math.floor(Math.random() * 10000) + 1000,
+                    active_users: Math.floor(Math.random() * 5000) + 500,
+                    new_registrations: Math.floor(Math.random() * 100) + 10,
+                    user_data: {
+                        total_users: Math.floor(Math.random() * 50000) + 10000,
+                        premium_users: Math.floor(Math.random() * 5000) + 1000,
+                        last_login_24h: Math.floor(Math.random() * 8000) + 2000
+                    }
+                };
+                break;
+
+            case 'order-service':
+                responseData.service_result = {
+                    status: 'success',
+                    total_orders: Math.floor(Math.random() * 5000) + 1000,
+                    pending_orders: Math.floor(Math.random() * 200) + 50,
+                    completed_orders: Math.floor(Math.random() * 4000) + 800,
+                    order_data: {
+                        daily_orders: Math.floor(Math.random() * 500) + 100,
+                        average_value: (Math.random() * 500 + 100).toFixed(2),
+                        top_category: ['电子产品', '服装', '食品', '图书'][Math.floor(Math.random() * 4)]
+                    }
+                };
+                break;
+
+            case 'payment-service':
+                responseData.service_result = {
+                    status: 'success',
+                    total_transactions: Math.floor(Math.random() * 8000) + 2000,
+                    successful_payments: Math.floor(Math.random() * 7500) + 1900,
+                    failed_payments: Math.floor(Math.random() * 100) + 10,
+                    payment_data: {
+                        total_amount: (Math.random() * 1000000 + 100000).toFixed(2),
+                        average_transaction: (Math.random() * 200 + 50).toFixed(2),
+                        payment_methods: {
+                            'credit_card': Math.floor(Math.random() * 40) + 30,
+                            'alipay': Math.floor(Math.random() * 30) + 25,
+                            'wechat_pay': Math.floor(Math.random() * 25) + 20
+                        }
+                    }
+                };
+                break;
+
+            case 'inventory-service':
+                responseData.service_result = {
+                    status: 'success',
+                    total_products: Math.floor(Math.random() * 2000) + 500,
+                    in_stock: Math.floor(Math.random() * 1800) + 400,
+                    out_of_stock: Math.floor(Math.random() * 50) + 10,
+                    inventory_data: {
+                        total_value: (Math.random() * 5000000 + 1000000).toFixed(2),
+                        low_stock_alerts: Math.floor(Math.random() * 20) + 5,
+                        categories: Math.floor(Math.random() * 50) + 20,
+                        warehouses: Math.floor(Math.random() * 10) + 3
+                    }
+                };
+                break;
+
+            case 'analytics-service':
+                responseData.service_result = {
+                    status: 'success',
+                    reports_generated: Math.floor(Math.random() * 100) + 20,
+                    data_points: Math.floor(Math.random() * 1000000) + 100000,
+                    processing_time: (Math.random() * 5 + 1).toFixed(2),
+                    analytics_data: {
+                        conversion_rate: (Math.random() * 10 + 5).toFixed(2),
+                        bounce_rate: (Math.random() * 30 + 20).toFixed(2),
+                        avg_session_duration: (Math.random() * 300 + 120).toFixed(0),
+                        top_pages: ['首页', '产品页', '购物车', '结算页'][Math.floor(Math.random() * 4)]
+                    }
+                };
+                break;
+
+            case 'notification-service':
+                responseData.service_result = {
+                    status: 'success',
+                    messages_sent: Math.floor(Math.random() * 5000) + 1000,
+                    delivery_rate: (Math.random() * 10 + 90).toFixed(2),
+                    failed_deliveries: Math.floor(Math.random() * 50) + 5,
+                    notification_data: {
+                        email_sent: Math.floor(Math.random() * 2000) + 500,
+                        sms_sent: Math.floor(Math.random() * 1000) + 200,
+                        push_sent: Math.floor(Math.random() * 3000) + 800,
+                        channels: ['email', 'sms', 'push', 'webhook']
+                    }
+                };
+                break;
+
+            default:
+                responseData.error = '未知的服务类型';
+        }
+
+        res.json(responseData);
+
+    } catch (error) {
+        res.status(500).json({
+            error: '拦截器请求处理失败',
+            service: serviceName,
+            details: error.message
+        });
+    }
+}
+
+// 拦截器签名验证函数
+function verifyInterceptorSignature(data, secretKey) {
+    try {
+        const { sign, ...signData } = data;
+
+        // 将数据按key排序并拼接
+        const sortedKeys = Object.keys(signData).sort();
+        const paramString = sortedKeys.map(key => `${key}=${signData[key]}`).join('&');
+        const signString = `${paramString}&key=${secretKey}`;
+
+        // 生成期望的签名（使用MD5）
+        const expectedSignature = crypto.createHash('md5')
+            .update(signString)
+            .digest('hex');
+
+        // 比较签名
+        return sign === expectedSignature;
+    } catch (error) {
+        console.error('拦截器签名验证错误:', error);
+        return false;
+    }
+}
+
+// 各个服务的拦截器API端点
+app.post('/api/interceptor-user-service', (req, res) => {
+    handleInterceptorRequest('user-service', req, res);
+});
+
+app.post('/api/interceptor-order-service', (req, res) => {
+    handleInterceptorRequest('order-service', req, res);
+});
+
+app.post('/api/interceptor-payment-service', (req, res) => {
+    handleInterceptorRequest('payment-service', req, res);
+});
+
+app.post('/api/interceptor-inventory-service', (req, res) => {
+    handleInterceptorRequest('inventory-service', req, res);
+});
+
+app.post('/api/interceptor-analytics-service', (req, res) => {
+    handleInterceptorRequest('analytics-service', req, res);
+});
+
+app.post('/api/interceptor-notification-service', (req, res) => {
+    handleInterceptorRequest('notification-service', req, res);
+});
+
 const port = 48159;
 
 // 启动服务器并初始化protobuf
