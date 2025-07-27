@@ -337,19 +337,46 @@
             display: flex;
             align-items: center;
             text-decoration: none;
-            color: #2c3e50;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            padding: 12px 20px;
+            border-radius: 12px;
             transition: all 0.3s ease;
             font-size: 0.95rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: 2px solid transparent;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .navbar-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .navbar-link:hover::before {
+            left: 100%;
         }
 
         .navbar-link:hover {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, #5a6fd8, #6a4c93);
             color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .navbar-link:active {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
 
         .navbar-link .icon {
@@ -362,17 +389,26 @@
             align-items: center;
             background: #24292e;
             color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
+            padding: 10px 16px;
+            border-radius: 10px;
             text-decoration: none;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.3s ease;
             font-size: 0.9rem;
+            border: 2px solid #24292e;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(36, 41, 46, 0.2);
         }
 
         .github-link:hover {
             background: #1a1e22;
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(36, 41, 46, 0.4);
+            border-color: #0366d6;
+        }
+
+        .github-link:active {
+            transform: translateY(-1px);
             box-shadow: 0 4px 15px rgba(36, 41, 46, 0.3);
         }
 
@@ -384,12 +420,20 @@
         }
 
         .star-count {
-            background: rgba(255, 255, 255, 0.2);
-            padding: 2px 6px;
-            border-radius: 10px;
-            margin-left: 6px;
+            background: rgba(255, 255, 255, 0.25);
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
             font-size: 0.8rem;
             font-weight: bold;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .github-link:hover .star-count {
+            background: rgba(255, 255, 255, 0.9);
+            color: #24292e;
+            transform: scale(1.05);
         }
 
         .loading-star {
@@ -439,13 +483,16 @@
             .navbar-link {
                 width: 100%;
                 justify-content: center;
-                padding: 12px 16px;
+                padding: 14px 20px;
+                margin-bottom: 8px;
+                font-size: 1rem;
             }
 
             .github-link {
                 width: 100%;
                 justify-content: center;
-                padding: 12px 16px;
+                padding: 14px 20px;
+                font-size: 1rem;
             }
         }
 
