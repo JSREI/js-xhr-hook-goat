@@ -1891,6 +1891,134 @@ function verifySignature(data, timestamp, nonce, signature, secretKey) {
     }
 }
 
+// 响应头加密Cookie接口
+app.post('/api/response-header-cookie', (req, res) => {
+    try {
+        const requestData = req.body;
+        const currentTime = Math.floor(Date.now() / 1000);
+
+        // 构建响应数据
+        const responseData = {
+            session_id: 'SES' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+            timestamp: currentTime,
+            authenticated: true,
+            service_type: requestData.service_type,
+            client_ip: requestData.client_ip
+        };
+
+        // 构建Cookie数据
+        const cookieData = {
+            user_id: 'USER' + Math.random().toString(36).substring(2, 10).toUpperCase(),
+            session_token: 'TOKEN' + Math.random().toString(36).substring(2, 20).toUpperCase(),
+            permission_level: 'standard',
+            expires_at: currentTime + 86400, // 24小时后过期
+            device_info: requestData.device_type || 'web',
+            last_activity: currentTime
+        };
+
+        // 根据服务类型生成不同的响应和Cookie
+        switch(requestData.service_type) {
+            case 'login':
+                responseData.login_result = {
+                    status: 'success',
+                    user_id: cookieData.user_id,
+                    access_token: 'AT' + Math.random().toString(36).substring(2, 25).toUpperCase(),
+                    token_type: 'Bearer',
+                    expires_in: 3600
+                };
+                cookieData.permission_level = 'authenticated';
+                cookieData.login_method = 'password';
+                cookieData.remember_me = requestData.remember;
+                break;
+
+            case 'oauth':
+                responseData.oauth_result = {
+                    status: 'authorized',
+                    provider: requestData.provider,
+                    access_token: 'OAT' + Math.random().toString(36).substring(2, 25).toUpperCase(),
+                    scope: requestData.scope,
+                    user_info: `${requestData.provider}_user_${Math.random().toString(36).substring(2, 8)}`
+                };
+                cookieData.permission_level = 'oauth';
+                cookieData.oauth_provider = requestData.provider;
+                cookieData.oauth_scope = requestData.scope;
+                break;
+
+            case 'sso':
+                responseData.sso_result = {
+                    status: 'authenticated',
+                    provider: requestData.sso_provider,
+                    user_identifier: `${requestData.domain}\\user_${Math.random().toString(36).substring(2, 8)}`,
+                    domain: requestData.domain,
+                    service_ticket: 'ST' + Math.random().toString(36).substring(2, 15).toUpperCase()
+                };
+                cookieData.permission_level = 'sso';
+                cookieData.sso_provider = requestData.sso_provider;
+                cookieData.domain = requestData.domain;
+                break;
+
+            case 'refresh':
+                responseData.refresh_result = {
+                    status: 'refreshed',
+                    new_access_token: 'RAT' + Math.random().toString(36).substring(2, 25).toUpperCase(),
+                    new_refresh_token: 'RRT' + Math.random().toString(36).substring(2, 25).toUpperCase(),
+                    expires_in: getExpirySeconds(requestData.expiry),
+                    scope: requestData.scope
+                };
+                cookieData.permission_level = 'refreshed';
+                cookieData.refresh_scope = requestData.scope;
+                cookieData.device_verified = requestData.device_verification === 'verify';
+                break;
+
+            default:
+                responseData.error = '未知的服务类型';
+        }
+
+        // 加密Cookie数据
+        const secretKey = 'cookie-secret-key-2025';
+        const encryptedCookie = encryptCookieData(cookieData, secretKey);
+
+        // 设置响应头
+        res.setHeader('X-Cookie', encryptedCookie);
+        res.setHeader('X-Session-Id', responseData.session_id);
+        res.setHeader('X-Auth-Status', responseData.authenticated ? 'success' : 'failed');
+        res.setHeader('X-Service-Type', requestData.service_type);
+
+        res.json(responseData);
+
+    } catch (error) {
+        res.status(500).json({
+            error: '响应头Cookie处理失败',
+            details: error.message
+        });
+    }
+});
+
+// Cookie数据加密函数
+function encryptCookieData(cookieData, secretKey) {
+    try {
+        const cookieString = JSON.stringify(cookieData);
+        const encrypted = crypto.createCipher('aes-256-cbc', secretKey);
+        let encryptedData = encrypted.update(cookieString, 'utf8', 'base64');
+        encryptedData += encrypted.final('base64');
+        return encryptedData;
+    } catch (error) {
+        console.error('Cookie加密错误:', error);
+        return '';
+    }
+}
+
+// 获取过期时间（秒）
+function getExpirySeconds(expiry) {
+    switch(expiry) {
+        case '1h': return 3600;
+        case '24h': return 86400;
+        case '7d': return 604800;
+        case '30d': return 2592000;
+        default: return 3600;
+    }
+}
+
 const port = 48159;
 
 // 启动服务器并初始化protobuf
