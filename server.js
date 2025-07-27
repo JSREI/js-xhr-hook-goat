@@ -1751,6 +1751,146 @@ app.post('/api/bidirectional-protobuf', (req, res) => {
     });
 });
 
+// 请求头签名验证接口
+app.post('/api/header-sign', (req, res) => {
+    try {
+        // 获取请求头中的签名信息
+        const xSign = req.headers['x-sign'];
+        const xTimestamp = req.headers['x-timestamp'];
+        const xNonce = req.headers['x-nonce'];
+        const xClientId = req.headers['x-client-id'];
+
+        if (!xSign || !xTimestamp || !xNonce || !xClientId) {
+            return res.status(400).json({
+                error: '缺少必要的签名请求头',
+                required_headers: ['X-Sign', 'X-Timestamp', 'X-Nonce', 'X-Client-Id']
+            });
+        }
+
+        // 检查时间戳（防止重放攻击）
+        const currentTime = Math.floor(Date.now() / 1000);
+        const requestTime = parseInt(xTimestamp);
+        const timeDiff = Math.abs(currentTime - requestTime);
+
+        if (timeDiff > 300) { // 5分钟有效期
+            return res.status(401).json({
+                error: '请求时间戳过期',
+                current_time: currentTime,
+                request_time: requestTime,
+                time_diff: timeDiff
+            });
+        }
+
+        // 获取请求体数据
+        const requestData = req.body;
+
+        // 验证签名
+        const secretKey = 'your-secret-key-2025';
+        const isValid = verifySignature(requestData, xTimestamp, xNonce, xSign, secretKey);
+
+        if (!isValid) {
+            return res.status(401).json({
+                error: '签名验证失败',
+                signature_valid: false
+            });
+        }
+
+        // 构建响应数据
+        const responseData = {
+            request_id: 'REQ' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+            timestamp: currentTime,
+            signature_valid: true,
+            api_type: requestData.api_type,
+            client_id: xClientId
+        };
+
+        // 根据API类型生成不同的响应
+        switch(requestData.api_type) {
+            case 'payment':
+                responseData.payment_result = {
+                    status: 'success',
+                    transaction_id: 'TXN' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                    amount: requestData.amount,
+                    payment_method: requestData.payment_method,
+                    fee: (requestData.amount * 0.006).toFixed(2), // 0.6% 手续费
+                    order_id: requestData.order_id,
+                    merchant_id: requestData.merchant_id
+                };
+                break;
+
+            case 'transfer':
+                responseData.transfer_result = {
+                    status: 'processing',
+                    transfer_id: 'TRF' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                    amount: requestData.amount,
+                    currency: requestData.currency,
+                    from_account: requestData.from_account,
+                    to_account: requestData.to_account,
+                    estimated_arrival: '2-24小时内到账'
+                };
+                break;
+
+            case 'sensitive':
+                responseData.access_result = {
+                    status: 'granted',
+                    data_type: requestData.data_type,
+                    access_level: requestData.access_level,
+                    user_id: requestData.user_id,
+                    department: requestData.department,
+                    access_token: 'AT' + Math.random().toString(36).substring(2, 25).toUpperCase(),
+                    expires_in: 3600 // 1小时
+                };
+                break;
+
+            case 'admin':
+                responseData.admin_result = {
+                    status: 'authorized',
+                    action: requestData.action,
+                    admin_level: requestData.admin_level,
+                    admin_id: requestData.admin_id,
+                    operation_id: 'OP' + Math.random().toString(36).substring(2, 15).toUpperCase(),
+                    audit_log: `管理员${requestData.admin_id}执行${requestData.action}操作`,
+                    session_id: requestData.session_id
+                };
+                break;
+
+            default:
+                responseData.error = '未知的API类型';
+        }
+
+        res.json(responseData);
+
+    } catch (error) {
+        res.status(500).json({
+            error: '请求头签名验证失败',
+            details: error.message
+        });
+    }
+});
+
+// 签名验证函数
+function verifySignature(data, timestamp, nonce, signature, secretKey) {
+    try {
+        // 将数据按key排序并拼接
+        const sortedKeys = Object.keys(data).sort();
+        const paramString = sortedKeys.map(key => `${key}=${data[key]}`).join('&');
+
+        // 构建签名字符串
+        const signString = `${paramString}&timestamp=${timestamp}&nonce=${nonce}&key=${secretKey}`;
+
+        // 生成期望的签名
+        const expectedSignature = crypto.createHmac('sha256', secretKey)
+            .update(signString)
+            .digest('hex');
+
+        // 比较签名
+        return signature === expectedSignature;
+    } catch (error) {
+        console.error('签名验证错误:', error);
+        return false;
+    }
+}
+
 const port = 48159;
 
 // 启动服务器并初始化protobuf
