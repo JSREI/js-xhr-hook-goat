@@ -2223,6 +2223,211 @@ app.post('/api/interceptor-notification-service', (req, res) => {
     handleInterceptorRequest('notification-service', req, res);
 });
 
+// 视频片段加密API端点
+app.get('/api/video-segment/:videoType/:segmentId', (req, res) => {
+    try {
+        const { videoType, segmentId } = req.params;
+        const segmentIndex = parseInt(segmentId);
+
+        // 视频配置
+        const videoConfigs = {
+            'movie-action': {
+                title: '动作电影 - 速度与激情',
+                encryptionKey: 'movie-action-key-2025',
+                segmentCount: 240
+            },
+            'series-drama': {
+                title: '电视剧集 - 权力的游戏',
+                encryptionKey: 'series-drama-key-2025',
+                segmentCount: 90
+            },
+            'documentary': {
+                title: '纪录片 - 地球脉动',
+                encryptionKey: 'documentary-key-2025',
+                segmentCount: 180
+            },
+            'live-stream': {
+                title: '直播流 - 新闻频道',
+                encryptionKey: 'live-stream-key-2025',
+                segmentCount: 20
+            }
+        };
+
+        const config = videoConfigs[videoType];
+        if (!config) {
+            return res.status(404).json({
+                error: '未知的视频类型',
+                available_types: Object.keys(videoConfigs)
+            });
+        }
+
+        if (segmentIndex < 0 || segmentIndex >= config.segmentCount) {
+            return res.status(404).json({
+                error: '片段索引超出范围',
+                segment_index: segmentIndex,
+                max_segments: config.segmentCount
+            });
+        }
+
+        // 生成模拟的视频片段数据
+        const segmentData = generateVideoSegmentData(videoType, segmentIndex);
+
+        // 加密视频片段
+        const encryptedSegment = encryptVideoSegment(segmentData, config.encryptionKey);
+
+        // 构建响应
+        const responseData = {
+            video_type: videoType,
+            segment_id: segmentIndex,
+            segment_name: `segment_${segmentIndex.toString().padStart(3, '0')}.ts`,
+            encrypted_data: encryptedSegment.encryptedData,
+            iv: encryptedSegment.iv,
+            encryption_method: 'AES-128-CBC',
+            segment_size: encryptedSegment.size,
+            duration: 30, // 30秒片段
+            timestamp: Math.floor(Date.now() / 1000),
+            content_type: 'video/mp2t'
+        };
+
+        res.json(responseData);
+
+    } catch (error) {
+        res.status(500).json({
+            error: '视频片段处理失败',
+            details: error.message
+        });
+    }
+});
+
+// 生成模拟视频片段数据
+function generateVideoSegmentData(videoType, segmentIndex) {
+    // 生成模拟的视频数据（实际应用中这里是真实的视频片段）
+    const baseData = `VIDEO_SEGMENT_${videoType.toUpperCase()}_${segmentIndex}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const randomData = Math.random().toString(36).substring(2, 15);
+
+    // 模拟视频片段内容
+    const segmentContent = {
+        header: 'TS_PACKET_HEADER',
+        video_data: baseData + '_' + randomData,
+        audio_data: `AUDIO_${segmentIndex}_${randomData}`,
+        metadata: {
+            segment_index: segmentIndex,
+            timestamp: timestamp,
+            duration: 30,
+            video_codec: 'H.264',
+            audio_codec: 'AAC',
+            resolution: videoType === 'documentary' ? '4K' : (videoType === 'movie-action' ? '1080p' : '720p')
+        },
+        footer: 'TS_PACKET_FOOTER'
+    };
+
+    return JSON.stringify(segmentContent);
+}
+
+// 加密视频片段
+function encryptVideoSegment(segmentData, encryptionKey) {
+    try {
+        // 生成随机IV
+        const iv = crypto.randomBytes(16);
+
+        // 创建AES-128-CBC加密器
+        const cipher = crypto.createCipher('aes-128-cbc', encryptionKey);
+        cipher.setAutoPadding(true);
+
+        // 加密数据
+        let encrypted = cipher.update(segmentData, 'utf8', 'base64');
+        encrypted += cipher.final('base64');
+
+        return {
+            encryptedData: encrypted,
+            iv: iv.toString('hex'),
+            size: Buffer.from(encrypted, 'base64').length
+        };
+    } catch (error) {
+        console.error('视频片段加密错误:', error);
+        throw new Error('视频片段加密失败');
+    }
+}
+
+// 批量视频片段API（用于流式加载）
+app.post('/api/video-segments/batch', (req, res) => {
+    try {
+        const { video_type, segment_ids } = req.body;
+
+        if (!video_type || !Array.isArray(segment_ids)) {
+            return res.status(400).json({
+                error: '缺少必要参数',
+                required: ['video_type', 'segment_ids']
+            });
+        }
+
+        const videoConfigs = {
+            'movie-action': { encryptionKey: 'movie-action-key-2025', segmentCount: 240 },
+            'series-drama': { encryptionKey: 'series-drama-key-2025', segmentCount: 90 },
+            'documentary': { encryptionKey: 'documentary-key-2025', segmentCount: 180 },
+            'live-stream': { encryptionKey: 'live-stream-key-2025', segmentCount: 20 }
+        };
+
+        const config = videoConfigs[video_type];
+        if (!config) {
+            return res.status(404).json({
+                error: '未知的视频类型',
+                available_types: Object.keys(videoConfigs)
+            });
+        }
+
+        const segments = [];
+        const errors = [];
+
+        segment_ids.forEach(segmentId => {
+            try {
+                const segmentIndex = parseInt(segmentId);
+
+                if (segmentIndex < 0 || segmentIndex >= config.segmentCount) {
+                    errors.push({
+                        segment_id: segmentId,
+                        error: '片段索引超出范围'
+                    });
+                    return;
+                }
+
+                const segmentData = generateVideoSegmentData(video_type, segmentIndex);
+                const encryptedSegment = encryptVideoSegment(segmentData, config.encryptionKey);
+
+                segments.push({
+                    segment_id: segmentIndex,
+                    segment_name: `segment_${segmentIndex.toString().padStart(3, '0')}.ts`,
+                    encrypted_data: encryptedSegment.encryptedData,
+                    iv: encryptedSegment.iv,
+                    size: encryptedSegment.size
+                });
+            } catch (error) {
+                errors.push({
+                    segment_id: segmentId,
+                    error: error.message
+                });
+            }
+        });
+
+        res.json({
+            video_type: video_type,
+            total_requested: segment_ids.length,
+            successful_segments: segments.length,
+            failed_segments: errors.length,
+            segments: segments,
+            errors: errors,
+            timestamp: Math.floor(Date.now() / 1000)
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            error: '批量视频片段处理失败',
+            details: error.message
+        });
+    }
+});
+
 const port = 48159;
 
 // 启动服务器并初始化protobuf
